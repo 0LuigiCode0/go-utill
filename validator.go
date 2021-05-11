@@ -9,62 +9,71 @@ import (
 type V map[string]interface{}
 
 //Validator полномосштабная валидация
-func Validator(isnull bool, data V) error {
-	for k, v := range data {
-		elem := reflect.ValueOf(v).Elem()
-		if err := valid(elem, isnull, k); err != nil {
-			return err
-		}
+func Validator(isNull bool, data V) error {
+	if err := vMap(reflect.ValueOf(data), isNull); err != nil {
+		return err
 	}
 	return nil
 }
 
-func valid(elem reflect.Value, isnull bool, k string) error {
+func valid(elem reflect.Value, isNull bool, k string) error {
 	switch kind := elem.Kind(); {
+	case kind == reflect.Ptr:
+		if err := valid(elem.Elem(), isNull, k); err != nil {
+			return fmt.Errorf("%v: %v", k, err)
+		}
 	case kind == reflect.String:
-		if err := vString(elem, isnull); err != nil {
+		if err := vString(elem, isNull); err != nil {
 			return fmt.Errorf("%v: %v", k, err)
 		}
 	case kind == reflect.Int || kind == reflect.Int64:
-		if err := vInt(elem, isnull); err != nil {
+		if err := vInt(elem, isNull); err != nil {
 			return fmt.Errorf("%v: %v", k, err)
 		}
 	case kind == reflect.Float32 || kind == reflect.Float64:
-		if err := vFloat(elem, isnull); err != nil {
+		if err := vFloat(elem, isNull); err != nil {
+			return fmt.Errorf("%v: %v", k, err)
+		}
+	case kind == reflect.Interface:
+		if err := valid(elem.Elem(), isNull, k); err != nil {
 			return fmt.Errorf("%v: %v", k, err)
 		}
 	case kind == reflect.Slice:
-		if err := vArr(elem, isnull); err != nil {
+		if err := vArr(elem, isNull); err != nil {
 			return fmt.Errorf("%v: %v", k, err)
 		}
 	case kind == reflect.Struct:
-		if err := vStruct(elem, isnull); err != nil {
+		if err := vStruct(elem, isNull); err != nil {
 			return fmt.Errorf("%v: %v", k, err)
 		}
-	case kind == reflect.Ptr:
-		if err := valid(elem.Elem(), isnull, k); err != nil {
-			return fmt.Errorf("%v: %v", k, err)
-		}
+		// case kind == reflect.Map:
+		// 	if err := vMap(elem, isNull); err != nil {
+		// 		return fmt.Errorf("%v: %v", k, err)
+		// 	}
 	}
 	return nil
 }
 
-func vString(elem reflect.Value, isnull bool) error {
+func vString(elem reflect.Value, isNull bool) error {
+	// fmt.Println(elem.Type().)
+	if !elem.CanSet() {
+		return fmt.Errorf("cannot set")
+	}
 	ee := elem
 	for ee.Kind() == reflect.Interface {
 		ee = ee.Elem()
 	}
 	ss := strings.TrimSpace(ee.String())
-	if isnull && ss == "" {
+	if isNull && ss == "" {
 		return fmt.Errorf("is nil")
 	}
 	elem.Set(reflect.ValueOf(ss))
 	return nil
 }
 
-func vInt(elem reflect.Value, isnull bool) error {
+func vInt(elem reflect.Value, isNull bool) error {
 	x := elem.Int()
-	if isnull {
+	if isNull {
 		if x <= 0 {
 			return fmt.Errorf("is nil")
 		}
@@ -76,9 +85,9 @@ func vInt(elem reflect.Value, isnull bool) error {
 	return nil
 }
 
-func vFloat(elem reflect.Value, isnull bool) error {
+func vFloat(elem reflect.Value, isNull bool) error {
 	x := elem.Float()
-	if isnull {
+	if isNull {
 		if x <= 0 {
 			return fmt.Errorf("is nil")
 		}
@@ -90,64 +99,31 @@ func vFloat(elem reflect.Value, isnull bool) error {
 	return nil
 }
 
-func vArr(elem reflect.Value, isnull bool) error {
-	switch kind := elem.Type().Elem().Kind(); {
-	case kind == reflect.String:
-		for i := 0; i < elem.Len(); i++ {
-			if err := vString(elem.Index(i), isnull); err != nil {
-				return fmt.Errorf("[%v]: %v", i, err)
-			}
-		}
-	case kind == reflect.Int || kind == reflect.Int64:
-		for i := 0; i < elem.Len(); i++ {
-			if err := vInt(elem.Index(i), isnull); err != nil {
-				return fmt.Errorf("[%v]: %v", i, err)
-			}
-		}
-	case kind == reflect.Float32 || kind == reflect.Float64:
-		for i := 0; i < elem.Len(); i++ {
-			if err := vFloat(elem.Index(i), isnull); err != nil {
-				return fmt.Errorf("[%v]: %v", i, err)
-			}
-		}
-	case kind == reflect.Interface:
-		for i := 0; i < elem.Len(); i++ {
-			e := elem.Index(i)
-			switch kind := e.Elem().Kind(); {
-			case kind == reflect.String:
-				if err := vString(e, isnull); err != nil {
-					return fmt.Errorf("[%v]: %v", i, err)
-				}
-			case kind == reflect.Int || kind == reflect.Int64:
-				if err := vInt(elem.Index(i).Elem(), isnull); err != nil {
-					return fmt.Errorf("[%v]: %v", i, err)
-				}
-			case kind == reflect.Float32 || kind == reflect.Float64:
-				if err := vFloat(elem.Index(i).Elem(), isnull); err != nil {
-					return fmt.Errorf("[%v]: %v", i, err)
-				}
-			case kind == reflect.Slice:
-				if err := vArr(elem.Index(i).Elem(), isnull); err != nil {
-					return fmt.Errorf("[%v]: %v", i, err)
-				}
-			}
-		}
-	case kind == reflect.Slice:
-		for i := 0; i < elem.Len(); i++ {
-			if err := vArr(elem.Index(i), isnull); err != nil {
-				return fmt.Errorf("[%v]: %v", i, err)
-			}
+func vArr(elem reflect.Value, isNull bool) error {
+	for i := 0; i < elem.Len(); i++ {
+		if err := valid(elem.Index(i), isNull, fmt.Sprint(i)); err != nil {
+			return fmt.Errorf("[%v]: %v", i, err)
 		}
 	}
 	return nil
 }
 
-func vStruct(elem reflect.Value, isnull bool) error {
+func vStruct(elem reflect.Value, isNull bool) error {
 	for i := 0; i < elem.NumField(); i++ {
 		if k := strings.TrimSpace(elem.Type().Field(i).Tag.Get("valid")); k != "" {
-			if err := valid(elem.Field(i), isnull, k); err != nil {
+			if err := valid(elem.Field(i), isNull, k); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func vMap(elem reflect.Value, isNull bool) error {
+	maps := elem.MapRange()
+	for maps.Next() {
+		if err := valid(maps.Value(), isNull, maps.Key().String()); err != nil {
+			return fmt.Errorf("[%v]: %v", maps.Key().String(), err)
 		}
 	}
 	return nil
