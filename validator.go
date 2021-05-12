@@ -16,42 +16,42 @@ func Validator(isNull bool, data V) error {
 	return nil
 }
 
-func valid(elem reflect.Value, isNull bool, k string) (out reflect.Value, err error) {
+func valid(elem reflect.Value, isNull bool) (out reflect.Value, err error) {
 	switch kind := elem.Kind(); {
 	case kind == reflect.Ptr:
-		out, err = valid(elem.Elem(), isNull, k)
+		out, err = valid(elem.Elem(), isNull)
 		if err != nil {
-			return out, fmt.Errorf("%v: %v", k, err)
+			return out, err
 		}
 	case kind == reflect.String:
 		out, err = vString(elem, isNull)
 		if err != nil {
-			return out, fmt.Errorf("%v: %v", k, err)
+			return out, err
 		}
 	case kind == reflect.Int || kind == reflect.Int64:
 		if err := vInt(elem, isNull); err != nil {
-			return out, fmt.Errorf("%v: %v", k, err)
+			return out, err
 		}
 	case kind == reflect.Float32 || kind == reflect.Float64:
 		if err := vFloat(elem, isNull); err != nil {
-			return out, fmt.Errorf("%v: %v", k, err)
+			return out, err
 		}
 	case kind == reflect.Interface:
-		out, err = valid(elem.Elem(), isNull, k)
+		out, err = valid(elem.Elem(), isNull)
 		if err != nil {
-			return out, fmt.Errorf("%v: %v", k, err)
+			return out, err
 		}
 	case kind == reflect.Slice:
 		if err := vArr(elem, isNull); err != nil {
-			return out, fmt.Errorf("%v: %v", k, err)
+			return out, err
 		}
 	case kind == reflect.Struct:
 		if err := vStruct(elem, isNull); err != nil {
-			return out, fmt.Errorf("%v: %v", k, err)
+			return out, err
 		}
 	case kind == reflect.Map:
 		if err := vMap(elem, isNull); err != nil {
-			return out, fmt.Errorf("%v: %v", k, err)
+			return out, err
 		}
 	}
 	return out, nil
@@ -104,8 +104,8 @@ func vFloat(elem reflect.Value, isNull bool) error {
 
 func vArr(elem reflect.Value, isNull bool) error {
 	for i := 0; i < elem.Len(); i++ {
-		if _, err := valid(elem.Index(i), isNull, fmt.Sprint(i)); err != nil {
-			return fmt.Errorf("[%v]: %v", i, err)
+		if _, err := valid(elem.Index(i), isNull); err != nil {
+			return fmt.Errorf("index [%v]: %v", i, err)
 		}
 	}
 	return nil
@@ -114,8 +114,8 @@ func vArr(elem reflect.Value, isNull bool) error {
 func vStruct(elem reflect.Value, isNull bool) error {
 	for i := 0; i < elem.NumField(); i++ {
 		if k := strings.TrimSpace(elem.Type().Field(i).Tag.Get("valid")); k != "" {
-			if _, err := valid(elem.Field(i), isNull, k); err != nil {
-				return err
+			if _, err := valid(elem.Field(i), isNull); err != nil {
+				return fmt.Errorf("tag %q: %v", k, err)
 			}
 		}
 	}
@@ -125,9 +125,9 @@ func vStruct(elem reflect.Value, isNull bool) error {
 func vMap(elem reflect.Value, isNull bool) error {
 	maps := elem.MapRange()
 	for maps.Next() {
-		ee, err := valid(maps.Value(), isNull, maps.Key().String())
+		ee, err := valid(maps.Value(), isNull)
 		if err != nil {
-			return fmt.Errorf("[%v]: %v", maps.Key().String(), err)
+			return fmt.Errorf("key %q: %v", maps.Key().String(), err)
 		}
 		elem.SetMapIndex(maps.Key(), ee)
 	}
