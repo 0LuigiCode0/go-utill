@@ -17,39 +17,43 @@ func Validator(isNull bool, data V) error {
 }
 
 func valid(elem reflect.Value, isNull bool) (out reflect.Value, err error) {
-	switch kind := elem.Kind(); {
-	case kind == reflect.Ptr:
+	switch elem.Kind() {
+	case reflect.Ptr:
 		out, err = valid(elem.Elem(), isNull)
 		if err != nil {
 			return out, err
 		}
-	case kind == reflect.String:
+	case reflect.String:
 		out, err = vString(elem, isNull)
 		if err != nil {
 			return out, err
 		}
-	case kind == reflect.Int || kind == reflect.Int64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		if err := vInt(elem, isNull); err != nil {
 			return out, err
 		}
-	case kind == reflect.Float32 || kind == reflect.Float64:
+	case reflect.Float32, reflect.Float64:
 		if err := vFloat(elem, isNull); err != nil {
 			return out, err
 		}
-	case kind == reflect.Interface:
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if err := vUint(elem, isNull); err != nil {
+			return out, err
+		}
+	case reflect.Interface:
 		out, err = valid(elem.Elem(), isNull)
 		if err != nil {
 			return out, err
 		}
-	case kind == reflect.Slice:
+	case reflect.Slice:
 		if err := vArr(elem, isNull); err != nil {
 			return out, err
 		}
-	case kind == reflect.Struct:
+	case reflect.Struct:
 		if err := vStruct(elem, isNull); err != nil {
 			return out, err
 		}
-	case kind == reflect.Map:
+	case reflect.Map:
 		if err := vMap(elem, isNull); err != nil {
 			return out, err
 		}
@@ -83,6 +87,16 @@ func vInt(elem reflect.Value, isNull bool) error {
 	} else {
 		if x < 0 {
 			return fmt.Errorf("is negative")
+		}
+	}
+	return nil
+}
+
+func vUint(elem reflect.Value, isNull bool) error {
+	x := elem.Uint()
+	if isNull {
+		if x == 0 {
+			return fmt.Errorf("is nil")
 		}
 	}
 	return nil
