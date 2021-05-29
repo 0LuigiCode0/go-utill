@@ -1,4 +1,4 @@
-package goUtill
+package validator
 
 import (
 	"fmt"
