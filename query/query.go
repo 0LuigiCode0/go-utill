@@ -1,11 +1,14 @@
-package net
+package query
 
 import (
 	"fmt"
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 )
+
+type Q map[string]interface{}
 
 func QueryMarshal(in interface{}) (out string) {
 	query := url.Values{}
@@ -34,6 +37,11 @@ func valid(elem reflect.Value, query *url.Values, key string) {
 		vStruct(elem, query, key)
 	case reflect.Map:
 		vMap(elem, query, key)
+	}
+	if elem.IsValid() {
+		if t, ok := elem.Interface().(time.Time); ok {
+			write(query, key, strings.TrimSpace(t.Format(time.RFC3339)))
+		}
 	}
 }
 

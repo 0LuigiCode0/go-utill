@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 )
 
 type V map[string]interface{}
@@ -56,6 +57,13 @@ func valid(elem reflect.Value, isNull bool) (out reflect.Value, err error) {
 	case reflect.Map:
 		if err := vMap(elem, isNull); err != nil {
 			return out, err
+		}
+	}
+	if elem.IsValid() {
+		if t, ok := elem.Interface().(time.Time); ok {
+			if err := vTime(t, isNull); err != nil {
+				return out, err
+			}
 		}
 	}
 	return out, nil
@@ -111,6 +119,15 @@ func vFloat(elem reflect.Value, isNull bool) error {
 	} else {
 		if x < 0 {
 			return fmt.Errorf("is negative")
+		}
+	}
+	return nil
+}
+
+func vTime(elem time.Time, isNull bool) error {
+	if isNull {
+		if elem.IsZero() {
+			return fmt.Errorf("is nil")
 		}
 	}
 	return nil
