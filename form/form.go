@@ -10,38 +10,37 @@ import (
 	"time"
 )
 
-type F map[string]interface{}
-
+//Генерирует mutlipart/form и content-type
 func FormMarshal(in interface{}) (*bytes.Buffer, string, error) {
 	out := &bytes.Buffer{}
 	form := multipart.NewWriter(out)
-	if err := valid(reflect.ValueOf(in), form, ""); err != nil {
+	if err := router(reflect.ValueOf(in), form, ""); err != nil {
 		return nil, "", err
 	}
 	err := form.Close()
 	return out, form.FormDataContentType(), err
 }
 
-func valid(elem reflect.Value, form *multipart.Writer, key string) (err error) {
+func router(elem reflect.Value, form *multipart.Writer, key string) (err error) {
 	switch elem.Kind() {
 	case reflect.Ptr:
-		valid(elem.Elem(), form, key)
+		return router(elem.Elem(), form, key)
 	case reflect.String:
-		vString(elem, form, key)
+		return rString(elem, form, key)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		vInt(elem, form, key)
+		return rInt(elem, form, key)
 	case reflect.Float32, reflect.Float64:
-		vFloat(elem, form, key)
+		return rFloat(elem, form, key)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		vUint(elem, form, key)
+		return rUint(elem, form, key)
 	case reflect.Interface:
-		valid(elem.Elem(), form, key)
+		return router(elem.Elem(), form, key)
 	case reflect.Slice:
-		vArr(elem, form, key)
+		return rArr(elem, form, key)
 	case reflect.Struct:
-		vStruct(elem, form, key)
+		return rStruct(elem, form, key)
 	case reflect.Map:
-		vMap(elem, form, key)
+		return rMap(elem, form, key)
 	}
 	if elem.IsValid() {
 		if t, ok := elem.Interface().(time.Time); ok {
@@ -51,52 +50,51 @@ func valid(elem reflect.Value, form *multipart.Writer, key string) (err error) {
 	return
 }
 
-func vString(elem reflect.Value, form *multipart.Writer, key string) error {
+func rString(elem reflect.Value, form *multipart.Writer, key string) error {
 	return write(form, key, strings.TrimSpace(elem.String()))
 }
-func vInt(elem reflect.Value, form *multipart.Writer, key string) error {
+func rInt(elem reflect.Value, form *multipart.Writer, key string) error {
 	return write(form, key, strings.TrimSpace(fmt.Sprint(elem.Int())))
 }
-func vUint(elem reflect.Value, form *multipart.Writer, key string) error {
+func rUint(elem reflect.Value, form *multipart.Writer, key string) error {
 	return write(form, key, strings.TrimSpace(fmt.Sprint(elem.Uint())))
 }
-func vFloat(elem reflect.Value, form *multipart.Writer, key string) error {
+func rFloat(elem reflect.Value, form *multipart.Writer, key string) error {
 	return write(form, key, strings.TrimSpace(fmt.Sprint(elem.Float())))
 }
 
-func vArr(elem reflect.Value, form *multipart.Writer, key string) (err error) {
+func rArr(elem reflect.Value, form *multipart.Writer, key string) (err error) {
 	for i := 0; i < elem.Len(); i++ {
-		if err = valid(elem.Index(i), form, key); err != nil {
-			return fmt.Errorf("%q [%v] write failed: %v", key, i, err)
+		if err = router(elem.Index(i), form, key); err != nil {
+			return
 		}
 	}
 	return
 }
 
-func vStruct(elem reflect.Value, form *multipart.Writer, key string) (err error) {
+func rStruct(elem reflect.Value, form *multipart.Writer, key string) (err error) {
 	for i := 0; i < elem.NumField(); i++ {
 		if k := strings.TrimSpace(elem.Type().Field(i).Tag.Get("form")); k != "" {
 			if key != "" {
-				k = strings.Join([]string{key, k}, "_")
+				k = strings.Join([]string{key, k}, ".")
 			}
-			if err = valid(elem.Field(i), form, k); err != nil {
-				return fmt.Errorf("%q write failed: %v", k, err)
+			if err = router(elem.Field(i), form, k); err != nil {
+				return
 			}
 		}
 	}
 	return
 }
 
-func vMap(elem reflect.Value, form *multipart.Writer, key string) (err error) {
+func rMap(elem reflect.Value, form *multipart.Writer, key string) (err error) {
 	maps := elem.MapRange()
 	for maps.Next() {
-		if k := fmt.Sprint(maps.Key().Interface()); k != "" {
-			if key != "" {
-				k = strings.Join([]string{key, k}, "_")
-			}
-			if err = valid(maps.Value(), form, k); err != nil {
-				return fmt.Errorf("%q write failed: %v", k, err)
-			}
+		k := maps.Key().String()
+		if key != "" {
+			k = strings.Join([]string{key, k}, ".")
+		}
+		if err = router(maps.Value(), form, k); err != nil {
+			return
 		}
 	}
 	return
@@ -109,7 +107,9 @@ func write(form *multipart.Writer, key, value string) (err error) {
 		if err != nil {
 			return
 		}
-		_, err = field.Write([]byte(value))
+		if _, err = field.Write([]byte(value)); err != nil {
+			err = fmt.Errorf("%v write error: %v", key, err)
+		}
 	}
 	return
 }

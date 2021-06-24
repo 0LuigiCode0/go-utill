@@ -7,160 +7,175 @@ import (
 	"time"
 )
 
-type V map[string]interface{}
-
-//Validator полномосштабная валидация
-func Validator(isNull bool, data V) error {
-	if err := vMap(reflect.ValueOf(data), isNull); err != nil {
+//Validator виледирует данные
+func Validator(isNull bool, data interface{}) error {
+	if _, err := router(reflect.ValueOf(data), isNull, ""); err != nil {
 		return err
 	}
 	return nil
 }
 
-func valid(elem reflect.Value, isNull bool) (out reflect.Value, err error) {
+func router(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
 	switch elem.Kind() {
 	case reflect.Ptr:
-		out, err = valid(elem.Elem(), isNull)
-		if err != nil {
-			return out, err
-		}
+		return router(elem.Elem(), isNull, key)
 	case reflect.String:
-		out, err = vString(elem, isNull)
-		if err != nil {
-			return out, err
-		}
+		return rString(elem, isNull, key)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if err := vInt(elem, isNull); err != nil {
-			return out, err
-		}
+		return rInt(elem, isNull, key)
 	case reflect.Float32, reflect.Float64:
-		if err := vFloat(elem, isNull); err != nil {
-			return out, err
-		}
+		return rFloat(elem, isNull, key)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if err := vUint(elem, isNull); err != nil {
-			return out, err
-		}
+		return rUint(elem, isNull, key)
 	case reflect.Interface:
-		out, err = valid(elem.Elem(), isNull)
-		if err != nil {
-			return out, err
-		}
+		return router(elem.Elem(), isNull, key)
 	case reflect.Slice:
-		if err := vArr(elem, isNull); err != nil {
-			return out, err
-		}
+		return rArr(elem, isNull, key)
 	case reflect.Struct:
-		if err := vStruct(elem, isNull); err != nil {
-			return out, err
-		}
+		return rStruct(elem, isNull, key)
 	case reflect.Map:
-		if err := vMap(elem, isNull); err != nil {
-			return out, err
-		}
+		return rMap(elem, isNull, key)
 	}
 	if elem.IsValid() {
 		if t, ok := elem.Interface().(time.Time); ok {
-			if err := vTime(t, isNull); err != nil {
-				return out, err
-			}
+			return rTime(t, isNull, key)
 		}
 	}
-	return out, nil
+	return
 }
 
-func vString(elem reflect.Value, isNull bool) (out reflect.Value, err error) {
+func rString(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
 	ee := elem
 	for ee.Kind() == reflect.Interface {
 		ee = ee.Elem()
 	}
 	ss := strings.TrimSpace(ee.String())
-	if isNull && ss == "" {
-		return out, fmt.Errorf("is nil")
-	}
 	out = reflect.ValueOf(ss)
-	if !elem.CanSet() {
-		return out, nil
+	if isNull && ss == "" {
+		err = fmt.Errorf("%v: is nil", key)
+		return
 	}
-	elem.Set(out)
-	return out, nil
+	return
 }
 
-func vInt(elem reflect.Value, isNull bool) error {
+func rInt(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+	out = elem
 	x := elem.Int()
 	if isNull {
 		if x <= 0 {
-			return fmt.Errorf("is nil")
+			err = fmt.Errorf("%v: is nil", key)
+			return
 		}
 	} else {
 		if x < 0 {
-			return fmt.Errorf("is negative")
+			err = fmt.Errorf("%v: is negative", key)
+			return
 		}
 	}
-	return nil
+	return
 }
 
-func vUint(elem reflect.Value, isNull bool) error {
+func rUint(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+	out = elem
 	x := elem.Uint()
 	if isNull {
 		if x == 0 {
-			return fmt.Errorf("is nil")
+			err = fmt.Errorf("%v: is nil", key)
+			return
 		}
 	}
-	return nil
+	return
 }
 
-func vFloat(elem reflect.Value, isNull bool) error {
+func rFloat(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+	out = elem
 	x := elem.Float()
 	if isNull {
 		if x <= 0 {
-			return fmt.Errorf("is nil")
+			err = fmt.Errorf("%v: is nil", key)
+			return
 		}
 	} else {
 		if x < 0 {
-			return fmt.Errorf("is negative")
+			err = fmt.Errorf("%v: is negative", key)
+			return
 		}
 	}
-	return nil
+	return
 }
 
-func vTime(elem time.Time, isNull bool) error {
+func rTime(elem time.Time, isNull bool, key string) (out reflect.Value, err error) {
+	out = reflect.ValueOf(elem)
 	if isNull {
 		if elem.IsZero() {
-			return fmt.Errorf("is nil")
+			err = fmt.Errorf("%v: is nil", key)
+			return
 		}
 	}
-	return nil
+	return
 }
 
-func vArr(elem reflect.Value, isNull bool) error {
+func rArr(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+	out = elem
 	for i := 0; i < elem.Len(); i++ {
-		if _, err := valid(elem.Index(i), isNull); err != nil {
-			return fmt.Errorf("index [%v]: %v", i, err)
+		k := fmt.Sprintf("[%v]", i)
+		if key != "" {
+			k = fmt.Sprintf("%v[%v]", key, i)
 		}
+		value, err := router(elem.Index(i), isNull, k)
+		if err != nil {
+			return out, err
+		}
+		if !elem.Index(i).CanSet() || elem.Index(i).IsZero() {
+			continue
+		}
+		if elem.Index(i).Kind() == reflect.Ptr {
+			value = value.Addr()
+		}
+		elem.Index(i).Set(value)
 	}
-	return nil
+	return
 }
 
-func vStruct(elem reflect.Value, isNull bool) error {
+func rStruct(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+	out = elem
 	for i := 0; i < elem.NumField(); i++ {
 		if k := strings.TrimSpace(elem.Type().Field(i).Tag.Get("valid")); k != "" {
-			if _, err := valid(elem.Field(i), isNull); err != nil {
-				return fmt.Errorf("tag %q: %v", k, err)
+			if key != "" {
+				k = fmt.Sprintf("%v.%v", key, k)
 			}
+			value, err := router(elem.Field(i), isNull, k)
+			if err != nil {
+				return out, err
+			}
+			if !elem.Field(i).CanSet() || elem.Field(i).IsZero() {
+				continue
+			}
+			if elem.Field(i).Kind() == reflect.Ptr {
+				value = value.Addr()
+			}
+			elem.Field(i).Set(value)
 		}
 	}
-	return nil
+	return
 }
 
-func vMap(elem reflect.Value, isNull bool) error {
+func rMap(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+	out = elem
 	maps := elem.MapRange()
 	for maps.Next() {
-		ee, err := valid(maps.Value(), isNull)
-		if err != nil {
-			return fmt.Errorf("key %q: %v", maps.Key().String(), err)
+		k := maps.Key().String()
+		if key != "" {
+			k = fmt.Sprintf("%v.%v", key, maps.Key().String())
 		}
-		elem.SetMapIndex(maps.Key(), ee)
+		value, err := router(maps.Value(), isNull, k)
+		if err != nil {
+			return out, err
+		}
+		if maps.Value().Kind() == reflect.Ptr {
+			value = value.Addr()
+		}
+		elem.SetMapIndex(maps.Key(), value)
 	}
-	return nil
+	return
 }

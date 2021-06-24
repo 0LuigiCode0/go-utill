@@ -8,35 +8,34 @@ import (
 	"time"
 )
 
-type Q map[string]interface{}
-
+//Генерирует строку query параметров
 func QueryMarshal(in interface{}) (out string) {
 	query := url.Values{}
-	valid(reflect.ValueOf(in), &query, "")
+	router(reflect.ValueOf(in), &query, "")
 	out = query.Encode()
 	return
 }
 
-func valid(elem reflect.Value, query *url.Values, key string) {
+func router(elem reflect.Value, query *url.Values, key string) {
 	switch elem.Kind() {
 	case reflect.Ptr:
-		valid(elem.Elem(), query, key)
+		router(elem.Elem(), query, key)
 	case reflect.String:
-		vString(elem, query, key)
+		rString(elem, query, key)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		vInt(elem, query, key)
+		rInt(elem, query, key)
 	case reflect.Float32, reflect.Float64:
-		vFloat(elem, query, key)
+		rFloat(elem, query, key)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		vUint(elem, query, key)
+		rUint(elem, query, key)
 	case reflect.Interface:
-		valid(elem.Elem(), query, key)
+		router(elem.Elem(), query, key)
 	case reflect.Slice:
-		vArr(elem, query, key)
+		rArr(elem, query, key)
 	case reflect.Struct:
-		vStruct(elem, query, key)
+		rStruct(elem, query, key)
 	case reflect.Map:
-		vMap(elem, query, key)
+		rMap(elem, query, key)
 	}
 	if elem.IsValid() {
 		if t, ok := elem.Interface().(time.Time); ok {
@@ -45,47 +44,46 @@ func valid(elem reflect.Value, query *url.Values, key string) {
 	}
 }
 
-func vString(elem reflect.Value, query *url.Values, key string) {
+func rString(elem reflect.Value, query *url.Values, key string) {
 	write(query, key, strings.TrimSpace(elem.String()))
 }
-func vInt(elem reflect.Value, query *url.Values, key string) {
+func rInt(elem reflect.Value, query *url.Values, key string) {
 	write(query, key, strings.TrimSpace(fmt.Sprint(elem.Int())))
 }
-func vUint(elem reflect.Value, query *url.Values, key string) {
+func rUint(elem reflect.Value, query *url.Values, key string) {
 	write(query, key, strings.TrimSpace(fmt.Sprint(elem.Uint())))
 }
-func vFloat(elem reflect.Value, query *url.Values, key string) {
+func rFloat(elem reflect.Value, query *url.Values, key string) {
 	write(query, key, strings.TrimSpace(fmt.Sprint(elem.Float())))
 }
 
-func vArr(elem reflect.Value, query *url.Values, key string) {
+func rArr(elem reflect.Value, query *url.Values, key string) {
 	for i := 0; i < elem.Len(); i++ {
-		valid(elem.Index(i), query, key)
+		router(elem.Index(i), query, key)
 	}
 }
 
-func vStruct(elem reflect.Value, query *url.Values, key string) {
+func rStruct(elem reflect.Value, query *url.Values, key string) {
 	for i := 0; i < elem.NumField(); i++ {
 		if k := strings.TrimSpace(elem.Type().Field(i).Tag.Get("query")); k != "" {
 			if key != "" {
-				k = strings.Join([]string{key, k}, "_")
+				k = strings.Join([]string{key, k}, ".")
 			}
-			valid(elem.Field(i), query, k)
+			router(elem.Field(i), query, k)
 		}
 	}
 }
 
-func vMap(elem reflect.Value, query *url.Values, key string) error {
+func rMap(elem reflect.Value, query *url.Values, key string) {
 	maps := elem.MapRange()
 	for maps.Next() {
 		if k := fmt.Sprint(maps.Key().Interface()); k != "" {
 			if key != "" {
-				k = strings.Join([]string{key, k}, "_")
+				k = strings.Join([]string{key, k}, ".")
 			}
-			valid(maps.Value(), query, k)
+			router(maps.Value(), query, k)
 		}
 	}
-	return nil
 }
 
 func write(query *url.Values, key, value string) {
