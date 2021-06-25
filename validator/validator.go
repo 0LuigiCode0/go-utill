@@ -59,6 +59,9 @@ func rString(elem reflect.Value, isNull bool, key string) (out reflect.Value, er
 		return
 	}
 	if elem.CanSet() {
+		if out.Type().ConvertibleTo(elem.Type()) {
+			out = out.Convert(elem.Type())
+		}
 		elem.Set(out)
 	}
 	return
