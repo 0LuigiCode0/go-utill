@@ -35,6 +35,9 @@ func router(elem reflect.Value, isNull bool, key string) (out reflect.Value, err
 		return rStruct(elem, isNull, key)
 	case reflect.Map:
 		return rMap(elem, isNull, key)
+	case reflect.Invalid:
+		err = fmt.Errorf("%v: is nil", key)
+		return
 	}
 	if elem.IsValid() {
 		if t, ok := elem.Interface().(time.Time); ok {
