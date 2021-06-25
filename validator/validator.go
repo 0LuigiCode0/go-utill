@@ -58,6 +58,9 @@ func rString(elem reflect.Value, isNull bool, key string) (out reflect.Value, er
 		err = fmt.Errorf("%v: is nil", key)
 		return
 	}
+	if elem.CanSet() {
+		elem.Set(out)
+	}
 	return
 }
 
