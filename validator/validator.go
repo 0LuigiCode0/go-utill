@@ -16,7 +16,6 @@ func Validator(isNull bool, data interface{}) error {
 }
 
 func router(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
-	fmt.Println(elem.Kind())
 	switch elem.Kind() {
 	case reflect.Ptr:
 		return router(elem.Elem(), isNull, key)
