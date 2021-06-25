@@ -16,6 +16,7 @@ func Validator(isNull bool, data interface{}) error {
 }
 
 func router(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+	fmt.Println(elem.Kind())
 	switch elem.Kind() {
 	case reflect.Ptr:
 		return router(elem.Elem(), isNull, key)
@@ -132,6 +133,9 @@ func rArr(elem reflect.Value, isNull bool, key string) (out reflect.Value, err e
 		if elem.Index(i).Kind() == reflect.Ptr {
 			value = value.Addr()
 		}
+		if value.Type().ConvertibleTo(elem.Index(i).Type()) {
+			value = value.Convert(elem.Index(i).Type())
+		}
 		elem.Index(i).Set(value)
 	}
 	return
@@ -154,6 +158,9 @@ func rStruct(elem reflect.Value, isNull bool, key string) (out reflect.Value, er
 			if elem.Field(i).Kind() == reflect.Ptr {
 				value = value.Addr()
 			}
+			if value.Type().ConvertibleTo(elem.Field(i).Type()) {
+				value = value.Convert(elem.Field(i).Type())
+			}
 			elem.Field(i).Set(value)
 		}
 	}
@@ -174,6 +181,9 @@ func rMap(elem reflect.Value, isNull bool, key string) (out reflect.Value, err e
 		}
 		if maps.Value().Kind() == reflect.Ptr {
 			value = value.Addr()
+		}
+		if value.Type().ConvertibleTo(maps.Value().Type()) {
+			value = value.Convert(maps.Value().Type())
 		}
 		elem.SetMapIndex(maps.Key(), value)
 	}
