@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 //Генерирует строку query параметров
@@ -40,6 +42,8 @@ func router(elem reflect.Value, query *url.Values, key string) {
 	if elem.IsValid() {
 		if t, ok := elem.Interface().(time.Time); ok {
 			write(query, key, strings.TrimSpace(t.Format(time.RFC3339)))
+		} else if t, ok := elem.Interface().(primitive.ObjectID); ok {
+			write(query, key, t.Hex())
 		}
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 //Validator виледирует данные
@@ -42,6 +44,8 @@ func router(elem reflect.Value, isNull bool, key string) (out reflect.Value, err
 	if elem.IsValid() {
 		if t, ok := elem.Interface().(time.Time); ok {
 			return rTime(t, isNull, key)
+		} else if t, ok := elem.Interface().(primitive.ObjectID); ok {
+			return rObjectId(t, isNull, key)
 		}
 	}
 	return
@@ -114,6 +118,17 @@ func rFloat(elem reflect.Value, isNull bool, key string) (out reflect.Value, err
 }
 
 func rTime(elem time.Time, isNull bool, key string) (out reflect.Value, err error) {
+	out = reflect.ValueOf(elem)
+	if isNull {
+		if elem.IsZero() {
+			err = fmt.Errorf("%v: is nil", key)
+			return
+		}
+	}
+	return
+}
+
+func rObjectId(elem primitive.ObjectID, isNull bool, key string) (out reflect.Value, err error) {
 	out = reflect.ValueOf(elem)
 	if isNull {
 		if elem.IsZero() {

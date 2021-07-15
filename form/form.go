@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 //Генерирует mutlipart/form и content-type
@@ -45,6 +47,8 @@ func router(elem reflect.Value, form *multipart.Writer, key string) (err error) 
 	if elem.IsValid() {
 		if t, ok := elem.Interface().(time.Time); ok {
 			return write(form, key, strings.TrimSpace(t.Format(time.RFC3339)))
+		} else if t, ok := elem.Interface().(primitive.ObjectID); ok {
+			return write(form, key, t.Hex())
 		}
 	}
 	return
