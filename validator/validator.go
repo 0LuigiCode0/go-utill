@@ -12,20 +12,20 @@ import (
 //Validator виледирует данные
 func Validator(isNull bool, data interface{}) error {
 	cycle := map[uintptr]bool{}
-	if _, err := router(&cycle, reflect.ValueOf(data), isNull, ""); err != nil {
+	if _, err := router(cycle, reflect.ValueOf(data), isNull, ""); err != nil {
 		return err
 	}
 	cycle = nil
 	return nil
 }
 
-func router(cycle *map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+func router(cycle map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
 	switch elem.Kind() {
 	case reflect.Ptr:
-		if _, ok := (*cycle)[elem.Pointer()]; ok {
+		if _, ok := cycle[elem.Pointer()]; ok {
 			return elem, nil
 		}
-		(*cycle)[elem.Pointer()] = true
+		cycle[elem.Pointer()] = true
 		return router(cycle, elem.Elem(), isNull, key)
 	case reflect.String:
 		return rString(elem, isNull, key)
@@ -145,7 +145,7 @@ func rObjectId(elem primitive.ObjectID, isNull bool, key string) (out reflect.Va
 	return
 }
 
-func rArr(cycle *map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+func rArr(cycle map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
 	out = elem
 	for i := 0; i < elem.Len(); i++ {
 		k := fmt.Sprintf("[%v]", i)
@@ -170,7 +170,7 @@ func rArr(cycle *map[uintptr]bool, elem reflect.Value, isNull bool, key string) 
 	return
 }
 
-func rStruct(cycle *map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+func rStruct(cycle map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
 	out = elem
 	for i := 0; i < elem.NumField(); i++ {
 		if k := strings.TrimSpace(elem.Type().Field(i).Tag.Get("valid")); k != "" {
@@ -196,7 +196,7 @@ func rStruct(cycle *map[uintptr]bool, elem reflect.Value, isNull bool, key strin
 	return
 }
 
-func rMap(cycle *map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+func rMap(cycle map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
 	out = elem
 	maps := elem.MapRange()
 	for maps.Next() {
