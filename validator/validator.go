@@ -11,16 +11,22 @@ import (
 
 //Validator виледирует данные
 func Validator(isNull bool, data interface{}) error {
-	if _, err := router(reflect.ValueOf(data), isNull, ""); err != nil {
+	cycle := map[uintptr]bool{}
+	if _, err := router(&cycle, reflect.ValueOf(data), isNull, ""); err != nil {
 		return err
 	}
+	cycle = nil
 	return nil
 }
 
-func router(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+func router(cycle *map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
 	switch elem.Kind() {
 	case reflect.Ptr:
-		return router(elem.Elem(), isNull, key)
+		if _, ok := (*cycle)[elem.Pointer()]; ok {
+			return elem, nil
+		}
+		(*cycle)[elem.Pointer()] = true
+		return router(cycle, elem.Elem(), isNull, key)
 	case reflect.String:
 		return rString(elem, isNull, key)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -30,13 +36,13 @@ func router(elem reflect.Value, isNull bool, key string) (out reflect.Value, err
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return rUint(elem, isNull, key)
 	case reflect.Interface:
-		return router(elem.Elem(), isNull, key)
+		return router(cycle, elem.Elem(), isNull, key)
 	case reflect.Slice:
-		return rArr(elem, isNull, key)
+		return rArr(cycle, elem, isNull, key)
 	case reflect.Struct:
-		return rStruct(elem, isNull, key)
+		return rStruct(cycle, elem, isNull, key)
 	case reflect.Map:
-		return rMap(elem, isNull, key)
+		return rMap(cycle, elem, isNull, key)
 	case reflect.Invalid:
 		err = fmt.Errorf("%v: is nil", key)
 		return
@@ -139,14 +145,14 @@ func rObjectId(elem primitive.ObjectID, isNull bool, key string) (out reflect.Va
 	return
 }
 
-func rArr(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+func rArr(cycle *map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
 	out = elem
 	for i := 0; i < elem.Len(); i++ {
 		k := fmt.Sprintf("[%v]", i)
 		if key != "" {
 			k = fmt.Sprintf("%v[%v]", key, i)
 		}
-		value, err := router(elem.Index(i), isNull, k)
+		value, err := router(cycle, elem.Index(i), isNull, k)
 		if err != nil {
 			return out, err
 		}
@@ -164,14 +170,14 @@ func rArr(elem reflect.Value, isNull bool, key string) (out reflect.Value, err e
 	return
 }
 
-func rStruct(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+func rStruct(cycle *map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
 	out = elem
 	for i := 0; i < elem.NumField(); i++ {
 		if k := strings.TrimSpace(elem.Type().Field(i).Tag.Get("valid")); k != "" {
 			if key != "" {
 				k = fmt.Sprintf("%v.%v", key, k)
 			}
-			value, err := router(elem.Field(i), isNull, k)
+			value, err := router(cycle, elem.Field(i), isNull, k)
 			if err != nil {
 				return out, err
 			}
@@ -183,14 +189,14 @@ func rStruct(elem reflect.Value, isNull bool, key string) (out reflect.Value, er
 			}
 			if value.Type().ConvertibleTo(elem.Field(i).Type()) {
 				value = value.Convert(elem.Field(i).Type())
+				elem.Field(i).Set(value)
 			}
-			elem.Field(i).Set(value)
 		}
 	}
 	return
 }
 
-func rMap(elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
+func rMap(cycle *map[uintptr]bool, elem reflect.Value, isNull bool, key string) (out reflect.Value, err error) {
 	out = elem
 	maps := elem.MapRange()
 	for maps.Next() {
@@ -198,7 +204,7 @@ func rMap(elem reflect.Value, isNull bool, key string) (out reflect.Value, err e
 		if key != "" {
 			k = fmt.Sprintf("%v.%v", key, maps.Key().String())
 		}
-		value, err := router(maps.Value(), isNull, k)
+		value, err := router(cycle, maps.Value(), isNull, k)
 		if err != nil {
 			return out, err
 		}
